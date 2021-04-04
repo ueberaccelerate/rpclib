@@ -14,19 +14,23 @@ namespace detail {
 static constexpr std::size_t default_buffer_size =
     rpc::constants::DEFAULT_BUFFER_SIZE;
 
-server_session::server_session(server *srv, RPCLIB_ASIO::io_service *io,
-                               RPCLIB_ASIO::ip::tcp::socket socket,
-                               std::shared_ptr<dispatcher> disp,
-                               bool suppress_exceptions)
+server_session::server_session(
+    server *srv, RPCLIB_ASIO::io_service *io,
+    RPCLIB_ASIO::ip::tcp::socket socket, std::shared_ptr<dispatcher> disp,
+    bool suppress_exceptions,
+    observable<session_id_t, socket_status> &socket_connection)
     : async_writer(io, std::move(socket)),
       parent_(srv),
       io_(io),
       read_strand_(*io),
       disp_(disp),
       pac_(),
-      suppress_exceptions_(suppress_exceptions) {
+      suppress_exceptions_(suppress_exceptions),
+      socket_connection_(socket_connection) {
     pac_.reserve_buffer(default_buffer_size); // TODO: make this configurable
                                               // [sztomi 2016-01-13]
+    socket_connection_.notify(reinterpret_cast<session_id_t>(this),
+                              rpc::socket_status::connected);
 }
 
 void server_session::start() { do_read(); }
@@ -49,7 +53,9 @@ void server_session::do_read() {
         // (since it's constexpr), but MSVC insists.
         read_strand_.wrap([this, self, max_read_bytes](std::error_code ec,
                                                        std::size_t length) {
-            if (exit_) { return; }
+            if (exit_) {
+                return;
+            }
             if (!ec) {
                 pac_.buffer_consumed(length);
                 RPCLIB_MSGPACK::unpacked result;
@@ -63,7 +69,8 @@ void server_session::do_read() {
                     io_->post([this, msg, z]() {
                         this_handler().clear();
                         this_session().clear();
-                        this_session().set_id(reinterpret_cast<session_id_t>(this));
+                        this_session().set_id(
+                            reinterpret_cast<session_id_t>(this));
                         this_server().cancel_stop();
 
                         auto resp = disp_->dispatch(msg, suppress_exceptions_);
@@ -132,6 +139,8 @@ void server_session::do_read() {
             } else if (ec == RPCLIB_ASIO::error::eof ||
                        ec == RPCLIB_ASIO::error::connection_reset) {
                 LOG_INFO("Client disconnected");
+                socket_connection_.notify(reinterpret_cast<session_id_t>(this),
+                                          rpc::socket_status::disconnected);
                 self->close();
             } else {
                 LOG_ERROR("Unhandled error code: {} | '{}'", ec, ec.message());
@@ -142,5 +151,5 @@ void server_session::do_read() {
     }
 }
 
-} /* detail */
-} /* rpc */
+} // namespace detail
+} // namespace rpc

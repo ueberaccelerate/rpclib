@@ -8,13 +8,19 @@
 #include "rpc/dispatcher.h"
 
 #include "rpc/detail/pimpl.h"
+#include "rpc/detail/server_observer.h"
 
 namespace rpc {
+
 
 namespace detail {
 class server_session;
 }
 
+enum class socket_status {
+    connected,
+    disconnected
+};
 //! \brief Implements a msgpack-rpc server. This is the main interfacing
 //! point with the library for creating servers.
 //!
@@ -93,6 +99,8 @@ public:
         disp_->bind(name, func);
     }
 
+    observable<session_id_t, socket_status> &socket_connection();
+
     //! \brief Sets the exception behavior in handlers. By default,
     //! handlers throwing will crash the server. If suppressing is on,
     //! the server will try to gather textual data and return it to
@@ -114,7 +122,7 @@ private:
     void close_session(std::shared_ptr<detail::server_session> const& s);
 
 private:
-	RPCLIB_DECLARE_PIMPL()
+    RPCLIB_DECLARE_PIMPL()
     std::shared_ptr<detail::dispatcher> disp_;
 };
 

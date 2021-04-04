@@ -11,7 +11,6 @@
 
 #include "rpc/detail/dev_utils.h"
 #include "rpc/detail/log.h"
-#include "rpc/detail/log.h"
 #include "rpc/detail/server_session.h"
 #include "rpc/detail/thread_group.h"
 
@@ -43,7 +42,7 @@ struct server::impl {
                 LOG_INFO("Accepted connection.");
                 auto s = std::make_shared<server_session>(
                     parent_, &io_, std::move(socket_), parent_->disp_,
-                    suppress_exceptions_);
+                    suppress_exceptions_, socket_connection_);
                 s->start();
                 sessions_.push_back(s);
             } else {
@@ -70,6 +69,7 @@ struct server::impl {
     io_service io_;
     ip::tcp::acceptor acceptor_;
     ip::tcp::socket socket_;
+    observable<session_id_t, socket_status> socket_connection_;
     rpc::detail::thread_group loop_workers_;
     std::vector<std::shared_ptr<server_session>> sessions_;
     std::atomic_bool suppress_exceptions_;
@@ -79,18 +79,17 @@ struct server::impl {
 RPCLIB_CREATE_LOG_CHANNEL(server)
 
 server::server(uint16_t port)
-    : pimpl(new server::impl(this, port)), disp_(std::make_shared<dispatcher>()) {
+    : pimpl(new server::impl(this, port)),
+      disp_(std::make_shared<dispatcher>()) {
     LOG_INFO("Created server on localhost:{}", port);
     pimpl->start_accept();
 }
 
-server::server(server&& other) noexcept {
-    *this = std::move(other);
-}
+server::server(server &&other) noexcept { *this = std::move(other); }
 
 server::server(std::string const &address, uint16_t port)
     : pimpl(new server::impl(this, address, port)),
-    disp_(std::make_shared<dispatcher>()) {
+      disp_(std::make_shared<dispatcher>()) {
     LOG_INFO("Created server on address {}:{}", address, port);
     pimpl->start_accept();
 }
@@ -101,12 +100,16 @@ server::~server() {
     }
 }
 
-server& server::operator=(server &&other) {
+server &server::operator=(server &&other) {
     pimpl = std::move(other.pimpl);
     other.pimpl = nullptr;
     disp_ = std::move(other.disp_);
     other.disp_ = nullptr;
     return *this;
+}
+
+observable<session_id_t, socket_status> &server::socket_connection() {
+    return pimpl->socket_connection_;
 }
 
 void server::suppress_exceptions(bool suppress) {
@@ -129,10 +132,10 @@ void server::stop() { pimpl->stop(); }
 void server::close_sessions() { pimpl->close_sessions(); }
 
 void server::close_session(std::shared_ptr<detail::server_session> const &s) {
-  auto it = std::find(begin(pimpl->sessions_), end(pimpl->sessions_), s);
-  if (it != end(pimpl->sessions_)) {
-    pimpl->sessions_.erase(it);
-  }
+    auto it = std::find(begin(pimpl->sessions_), end(pimpl->sessions_), s);
+    if (it != end(pimpl->sessions_)) {
+        pimpl->sessions_.erase(it);
+    }
 }
 
-} /* rpc */
+} // namespace rpc
