@@ -85,7 +85,9 @@ file(GLOB_RECURSE RPCLIB_HEADERS
 file(GLOB_RECURSE DEP_HEADERS
   ${RPCLIB_DEPENDENCIES}/include/*.h
   ${RPCLIB_DEP_LIBRARIDEPENDENCIES}/include/*.hpp)
-
+list(APPEND RPCLIB_HEADERS
+  include/rpc/detail/server_observer.h
+)
 set(DEP_SOURCES
   ${RPCLIB_DEPENDENCIES}/src/format.cc
   ${RPCLIB_DEPENDENCIES}/src/posix.cc)
@@ -204,6 +206,7 @@ if(RPCLIB_BUILD_EXAMPLES)
   add_subdirectory(examples/echo)
   add_subdirectory(examples/mandelbrot)
   add_subdirectory(examples/calculator)
+  add_subdirectory(examples/client-server-status)
 endif()
 
 #

@@ -5,6 +5,7 @@
 
 #include "asio.hpp"
 #include "rpc/msgpack.hpp"
+#include "rpc/detail/log.h"
 #include <condition_variable>
 #include <deque>
 #include <memory>
